@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>운동 루틴 헬퍼</title>
+  <style>
+    :root{--bg:#000;--card:#111;--muted:#777;--accent:#22c55e}
+    html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans KR',sans-serif}
+    .app{max-width:420px;margin:0 auto;padding:18px;height:100%;box-sizing:border-box;display:flex;flex-direction:column}
+    header{display:flex;flex-direction:column;gap:6px}
+    .date{font-size:18px;font-weight:600}
+    .subtitle{font-size:13px;color:var(--muted)}
+    main{margin-top:12px;flex:1;overflow:auto;padding-bottom:16px}
+    .list{display:flex;flex-direction:column;gap:10px}
+
+    .item{display:flex;align-items:center;gap:10px;padding:12px;border-radius:14px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:0 2px 6px rgba(0,0,0,0.6)}
+    .left{width:36px;height:36px;border-radius:50%;flex:0 0 36px;display:flex;align-items:center;justify-content:center}
+    .checkbox{width:22px;height:22px;border-radius:999px;border:2px solid #444;background:transparent;display:inline-block;position:relative;cursor:pointer}
+    .checkbox.checked{background:var(--accent);border-color:var(--accent)}
+    .checkbox.checked::after{content:'';position:absolute;left:5px;top:2px;width:6px;height:12px;border:2px solid #021;transform:rotate(40deg);border-color:#002200;background:transparent}
+
+    .content{flex:1;display:flex;flex-direction:column}
+    .title{font-size:15px}
+    .meta{font-size:12px;color:var(--muted);margin-top:4px}
+    .done .title{text-decoration:line-through;color:#777}
+    .done .meta{color:#666}
+
+    footer{margin-top:10px;font-size:12px;color:var(--muted);text-align:center}
+
+    /* mobile portrait fit */
+    @media (orientation:portrait){.app{max-width:420px}}
+    @media (orientation:landscape){.app{max-width:720px}}
+
+    /* small animation */
+    .item{transition:transform 180ms ease,opacity 180ms ease}
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header>
+      <div class="date" id="date">2025/10/18</div>
+      <div class="subtitle" id="subtitle">로딩 중...</div>
+    </header>
+
+    <main>
+      <div class="list" id="list"></div>
+    </main>
+
+    <footer>
+      시작일: 2025/10/18 · 하루 10분 × 5세션 · 체크하면 항목이 하단으로 이동합니다
+    </footer>
+  </div>
+
+  <script>
+    // 시작일 고정
+    const START_DATE = new Date('2025-10-18T00:00:00');
+
+    // 요일 이름 맵
+    const weekdayNames = ['일','월','화','수','목','금','토'];
+
+    // 1개월 루틴 주간 매핑 (하드코딩, 사용자 요청 기반)
+    const routinesByWeekday = {
+      '월': ['상A','하A','상B','하B','회'],
+      '화': ['하A','상A','하B','상B','회'],
+      '수': ['상B','하B','상A','하A','회'],
+      '목': ['하A','상B','하B','상A','회'],
+      '금': ['상A','하A','상B','하B','회'],
+      '토': ['하B','상A','하A','상B','회'],
+      '일': ['회복 전면']
+    };
+
+    // 운동 세부 목록
+    const exercises = {
+      '상A': [
+        {name:'푸쉬업',detail:'15회 × 2세트'},
+        {name:'플랭크 숄더탭',detail:'40초'},
+        {name:'밴드 로우',detail:'15회 × 2세트'},
+        {name:'암서클',detail:'40초 (전후)'},
+        {name:'플랭크',detail:'40초'}
+      ],
+      '하A': [
+        {name:'스쿼트',detail:'20회 × 2세트'},
+        {name:'런지',detail:'10회 × 2세트 (좌우)'},
+        {name:'카프 레이즈',detail:'25회'},
+        {name:'힙브릿지',detail:'20회'},
+        {name:'사이드 스텝',detail:'40초'}
+      ],
+      '상B': [
+        {name:'인클라인 푸쉬업',detail:'15회 × 2세트'},
+        {name:'밴드 풀어파트',detail:'20회'},
+        {name:'슈퍼맨',detail:'20회'},
+        {name:'트라이셉스 딥스',detail:'15회'},
+        {name:'플랭크 투 푸쉬업',detail:'40초'}
+      ],
+      '하B': [
+        {name:'점프 스쿼트',detail:'15회 (또는 빠른 스쿼트)'},
+        {name:'사이드 런지',detail:'10회 × 2세트'},
+        {name:'힙 어브덕션',detail:'15회 × 2세트'},
+        {name:'월싯',detail:'40초'},
+        {name:'스텝 업',detail:'20회'}
+      ],
+      '회': [
+        {name:'브리딩 스쿼트',detail:'10회'},
+        {name:'캣카우',detail:'6회'},
+        {name:'플랭크',detail:'30초 × 2세트'},
+        {name:'햄스트링 스트레칭',detail:'30초'},
+        {name:'무릎 당기기',detail:'1분'}
+      ],
+      '회복 전면': [
+        {name:'브리딩 스쿼트',detail:'10회'},
+        {name:'캣카우',detail:'6회'},
+        {name:'플랭크',detail:'30초 × 2세트'},
+        {name:'햄스트링 스트레칭',detail:'30초'},
+        {name:'무릎 당기기',detail:'1분'}
+      ]
+    };
+
+    // 유틸: 날짜 포맷 YYYY/MM/DD
+    function formatDate(d){
+      const y=d.getFullYear();
+      const m=String(d.getMonth()+1).padStart(2,'0');
+      const day=String(d.getDate()).padStart(2,'0');
+      return `${y}/${m}/${day}`;
+    }
+
+    const today = new Date();
+    const dateEl = document.getElementById('date');
+    const subtitleEl = document.getElementById('subtitle');
+    const listEl = document.getElementById('list');
+
+    dateEl.textContent = formatDate(today);
+
+    // 오늘 요일 루틴 불러오기
+    const dow = weekdayNames[today.getDay()];
+    const routineKeys = routinesByWeekday[dow] || ['회'];
+    subtitleEl.textContent = `요일: ${dow}요일 · 루틴: ${routineKeys.join(' · ')}`;
+
+    // 로컬스토리지 키
+    const STORAGE_KEY = 'workout_helper_state_v1';
+
+    // 초기 상태 불러오기
+    const raw = localStorage.getItem(STORAGE_KEY);
+    let state = raw ? JSON.parse(raw) : {checked:{}, order:[]};
+
+    // 빌드 가능한 항목 리스트 (각 항목은 고유키)
+    function buildItemsFromRoutine(keys){
+      const items = [];
+      keys.forEach(k=>{
+        const list = exercises[k] || [];
+        list.forEach((ex, idx)=>{
+          const uid = `${k}__${idx}`; // 고유 ID
+          items.push({id:uid,group:k,title:ex.name,meta:ex.detail});
+        });
+      });
+      return items;
+    }
+
+    let items = buildItemsFromRoutine(routineKeys);
+
+    // 초기 order 동기화: 만약 저장된 order이 존재하면 그 순서를 적용하고 새 항목은 추가
+    function applySavedOrder(items){
+      if(!state.order || !state.order.length) return items;
+      const map = new Map(items.map(i=>[i.id,i]));
+      const ordered = [];
+      // push saved ids that still exist
+      state.order.forEach(id=>{ if(map.has(id)){ ordered.push(map.get(id)); map.delete(id); } });
+      // remaining new items appended
+      map.forEach(v=>ordered.push(v));
+      return ordered;
+    }
+
+    items = applySavedOrder(items);
+
+    // 렌더
+    function render(){
+      // 분리: 체크 안된 것 먼저, 체크된 것 나중
+      const unchecked = items.filter(it=>!state.checked[it.id]);
+      const checked = items.filter(it=>state.checked[it.id]);
+      // 최종 렌더 순서
+      const display = [...unchecked,...checked];
+
+      // update saved order
+      state.order = display.map(d=>d.id);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+      listEl.innerHTML = '';
+      display.forEach(it => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'item' + (state.checked[it.id] ? ' done' : '');
+        itemEl.dataset.id = it.id;
+
+        const left = document.createElement('div'); left.className = 'left';
+        const box = document.createElement('div'); box.className = 'checkbox' + (state.checked[it.id] ? ' checked' : '');
+        box.setAttribute('role','checkbox');
+        box.setAttribute('aria-checked', state.checked[it.id] ? 'true' : 'false');
+        left.appendChild(box);
+
+        box.addEventListener('click', ()=>{
+          toggle(it.id);
+        });
+
+        const content = document.createElement('div'); content.className = 'content';
+        const title = document.createElement('div'); title.className = 'title'; title.textContent = it.title;
+        const meta = document.createElement('div'); meta.className = 'meta'; meta.textContent = it.meta;
+        content.appendChild(title); content.appendChild(meta);
+
+        itemEl.appendChild(left); itemEl.appendChild(content);
+        listEl.appendChild(itemEl);
+      });
+    }
+
+    function toggle(id){
+      const now = !!state.checked[id];
+      state.checked[id] = !now;
+
+      // reorder: if now checked becomes unchecked -> move to top; if unchecked becomes checked -> move to bottom
+      const idx = items.findIndex(i=>i.id===id);
+      if(idx!==-1){
+        const [it] = items.splice(idx,1);
+        if(state.checked[id]){
+          // moved to bottom
+          items.push(it);
+        } else {
+          // moved to top
+          items.unshift(it);
+        }
+      }
+
+      // persist
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      render();
+    }
+
+    // 초기 렌더 호출
+    render();
+
+    // 만약 사용자가 날짜를 바꿔서 시작일 기준 주차 계산을 원하면 아래 주차를 계산해 표기할 수 있음.
+    function weeksSinceStart(){
+      const diff = Math.floor((today - START_DATE)/(1000*60*60*24));
+      return Math.floor(diff/7) + 1;
+    }
+
+    // subtitle에 주차 정보 추가
+    subtitleEl.textContent += ` · 시작일로부터 ${weeksSinceStart()}주차`;
+
+    // 키보드 접근성: 스페이스로 토글
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === ' ') {
+        const active = document.activeElement;
+        if(active && active.closest && active.closest('.item')){
+          e.preventDefault();
+          const id = active.closest('.item').dataset.id;
+          if(id) toggle(id);
+        }
+      }
+    });
+  </script>
+</body>
+</html>
